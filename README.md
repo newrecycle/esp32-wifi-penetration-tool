@@ -16,6 +16,7 @@ Main new features:
 - "Ninja-feature"
 - Black list of station MAC addresses
 - Control LED over Bluetooth terminal
+- Support the latest IDF (v5.0.1)
  
 <br>
 
@@ -137,6 +138,10 @@ To prevent this issue, every time we send targetted deauth frames, we handle onl
 ## Control LED over Bluetooth terminal
 If you placed your ESP32 device and configured for infinite attack, and especially if you did it for multiple ESP32 devices, you may forget exact place, where did you place them. Using Bluetooth terminal you can controll (turn on/off, blink) onboard LED to make search of device easier.
 
+<br>
+
+## Support the latest IDF (v5.0.1)
+This project can be build using the latest at this moment IDF - v5.0.1. I checked functionality, looks like everything works well.
 <br>
 
 <br><br><br>
