@@ -50,6 +50,7 @@ void WiFiFrameSenderTask::run(void* data) {
       auto err = esp_wifi_80211_tx(WIFI_IF_AP, frame.data(), frame.size(), false);
       if (err == ESP_ERR_NO_MEM) {
         // TX buffer is full. Need to sleep and try again
+        ESP_LOGW(LOG_TAG, "No memory to send WiFi raw frame. Waiting...");
         delay(10);
         continue;
       } else if (err == ESP_OK) {

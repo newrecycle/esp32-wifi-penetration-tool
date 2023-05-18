@@ -1,6 +1,6 @@
 # TODO
 
-PRIORITIES: 16, 1, 3
+PRIORITIES: 1, 16, 3
 
 1. Check if we can have a callback, notifying about hew WiFi client connected. Currently looks like there are 2 layers of such callbacks - system and user-defined. And in some cases (ex. user didn't authentificated yet) user-level handler is not called. Need to check it. If this is true, we are not able to check which WiFi stations are trying to connect to our AP
 
@@ -9,7 +9,7 @@ I REALLY need MAC addresses from 5G network to add them to black list on UI late
     * Make new end-point to read this list
 
 4. ~~"Black list of WiFi client MACs" feature. Add WiFi client MAC addresses list in WebUI. For those addresses need to send personal deauth frame for every Rogue AP during DOS attack. So, specified WiFi clients will not be able to connect to any attacked AP~~
-Currently clack list is hardcoded and it seems enough.
+Currently black list is hardcoded and it seems enough.
 
 5. ~~Also need to have black list of router's MACs. If one of them is detected, its SSID should be printed on WebUI. So, if user will change SSID, they will be anyway dosplayed.~~<br>
 ~~Ex. use pre-defined list of such MACs in WebUI. After scanning is done, WebUI can check list of returned SSIDs to find those ones from the black list~~<br>
@@ -40,6 +40,3 @@ Not wlways reproducible.
 18. How to report to WebUI about progress of OTA? The only way I know to send messages from client to web-server is web-sockets. Can we avoid such an overcomplication?
 
 19. Is it possible to set config variable via command line as "idf.py build -DDEVICE_ID=2"?
-
-20. BUG: by some reason if AP is created by mobile phone, then DOS attack nearly doesn't affect it. Only for the 1st time after attack is started, you will be disconnected. But if you reconnect, then no "leave" messages are printed in  logs. It looks like "max_connection" parameter is not set up for this attack, but it is.
-NOTE: Test updated deauth attack (targetted, not broadcast) in the same scenario
