@@ -1,1 +1,41 @@
+# Device ID. Use it in case you have multiple ESP32 with the same firmware.
+# This ID is used to generate unique IP addresses, WiFi access poin names, Bluetooth device names, etc.
+CONFIG_DEVICE_ID=1
+
+# This parameter is changed from default value 32 to let you have 20 items in MAC black list.
+# Pay attention, that the more items in that list, the more you may need to set this value. Max is 128.
+CONFIG_ESP32_WIFI_DYNAMIC_TX_BUFFER_NUM=64
+
 CONFIG_ESP32_WIFI_NVS_ENABLED=n
+CONFIG_OTA_ALLOW_HTTP=y
+
+# These settings are required to build BT stack
+CONFIG_BT_ENABLED=y
+CONFIG_BTDM_CTRL_MODE_BLE_ONLY=n
+CONFIG_BTDM_CTRL_MODE_BR_EDR_ONLY=y
+CONFIG_BTDM_CTRL_MODE_BTDM=n
+CONFIG_BT_CLASSIC_ENABLED=y
+CONFIG_BT_SPP_ENABLED=y
+CONFIG_BT_BLE_ENABLED=n
+# Uncomment it if you want legacy style of Bluetooth pairing - using PIN
+# CONFIG_BT_SSP_ENABLED=n
+
+# These settings are required to use custom partition table to enable OTA feature
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partition_table\\partitions_two_ota.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partition_table\\partitions_two_ota.csv"
+CONFIG_PARTITION_TABLE_OFFSET=0x8000
+CONFIG_PARTITION_TABLE_MD5=y
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+
+# Enable or disable unit-tests
+CONFIG_ENABLE_UNIT_TESTS=n
+
+# In case you have problems with watchdog timer (ex. executing long test), then you can disable it.
+# Remember that this is very bad practice and you should avoid it by all means
+# CONFIG_ESP_TASK_WDT_TIMEOUT_S=50
+# CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
+# CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n
+
+CONFIG_LOG_MAXIMUM_LEVEL=5
