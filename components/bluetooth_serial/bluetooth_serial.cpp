@@ -2,20 +2,20 @@
 
 #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include <map>
-
-#include "device_id.h"
 #include "esp_bt.h"
 #include "esp_bt_device.h"
 #include "esp_bt_main.h"
-#include "esp_gatts_api.h"  // BLE GATT API
+#include "esp_gatts_api.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
-#include "sdkconfig.h"
+#include "esp_gap_ble_api.h"
+
+#define GATTS_SERVICE_UUID   0x00FF  // Custom service UUID
+#define GATTS_CHAR_UUID      0xFF01  // Custom characteristic UUID
+#define GATTS_NUM_HANDLE     4       // Number of handles for your GATT service
 
 namespace {
 const char* LOG_TAG{"BLE"};
-const char* kServiceUUID = "00001800-0000-1000-8000-00805f9b34fb";  // Example BLE service UUID
-const char* kCharacteristicUUID = "00002a00-0000-1000-8000-00805f9b34fb";  // Example BLE characteristic UUID
 
 std::string bleDataToString(const uint8_t* data, uint16_t len) {
     return std::string(reinterpret_cast<const char*>(data), len);
@@ -31,56 +31,6 @@ void esp_ble_gap_callback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t* 
             }
             break;
         }
-        // Other gap events can be handled here as needed
-        default:
-            break;
-    }
-}
-
-void esp_gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t* param) {
-    auto& bleSerial = BluetoothSerial::instance();
-    
-    switch (event) {
-        case ESP_GATTS_CONNECT_EVT:
-            ESP_LOGI(LOG_TAG, "BLE device connected");
-            bleSerial.mConnectionHandle = param->connect.conn_id;
-            bleSerial.limitBTLogs(true);
-            break;
-
-        case ESP_GATTS_DISCONNECT_EVT:
-            ESP_LOGI(LOG_TAG, "BLE device disconnected");
-            bleSerial.mConnectionHandle = 0;
-            bleSerial.limitBTLogs(false);
-            // Simulate disconnection event to other parts of the system
-            bleSerial.onBtDataRecevied("bleterminalconnected 0");
-            break;
-
-        case ESP_GATTS_WRITE_EVT:
-            if (param->write.is_prep) {
-                // Handle prepared write
-            } else {
-                std::string receivedData = bleDataToString(param->write.value, param->write.len);
-                bleSerial.onBtDataRecevied(receivedData);
-            }
-            break;
-
-        case ESP_GATTS_READ_EVT:
-            ESP_LOGI(LOG_TAG, "BLE Read event");
-            // Handle reading from characteristic
-            break;
-
-        case ESP_GATTS_MTU_EVT:
-            ESP_LOGI(LOG_TAG, "MTU size updated to %d", param->mtu.mtu);
-            break;
-
-        case ESP_GATTS_CREATE_EVT:
-            ESP_LOGI(LOG_TAG, "Service created");
-            break;
-
-        case ESP_GATTS_START_EVT:
-            ESP_LOGI(LOG_TAG, "Service started");
-            break;
-
         default:
             break;
     }
@@ -93,6 +43,76 @@ BluetoothSerial& BluetoothSerial::instance() {
     return instance;
 }
 
+void BluetoothSerial::esp_gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t* param) {
+    auto& bleSerial = BluetoothSerial::instance();
+    switch (event) {
+        case ESP_GATTS_REG_EVT: {
+            ESP_LOGI(LOG_TAG, "GATT server registered");
+            bleSerial.mGattIf = gatts_if;
+
+            // Break down the service ID initialization into multiple steps
+            esp_gatt_srvc_id_t service_id;
+            service_id.is_primary = true;  // Initialize 'is_primary'
+            service_id.id.inst_id = 0x00;  // Initialize 'inst_id'
+            service_id.id.uuid.len = ESP_UUID_LEN_16;  // Set UUID length
+            service_id.id.uuid.uuid.uuid16 = GATTS_SERVICE_UUID;  // Set 16-bit UUID
+
+            // Create GATT service
+            esp_ble_gatts_create_service(gatts_if, &service_id, GATTS_NUM_HANDLE);
+            break;
+        }
+
+        case ESP_GATTS_CREATE_EVT: {
+            ESP_LOGI(LOG_TAG, "GATT service created");
+            bleSerial.mServiceHandle = param->create.service_handle;
+            esp_ble_gatts_start_service(bleSerial.mServiceHandle);
+
+            // Add GATT characteristic
+            esp_bt_uuid_t char_uuid;
+            char_uuid.len = ESP_UUID_LEN_16;
+            char_uuid.uuid.uuid16 = GATTS_CHAR_UUID;
+
+            esp_ble_gatts_add_char(bleSerial.mServiceHandle, &char_uuid, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
+                                   ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE | ESP_GATT_CHAR_PROP_BIT_NOTIFY, NULL, NULL);
+            break;
+        }
+
+        case ESP_GATTS_ADD_CHAR_EVT:
+            ESP_LOGI(LOG_TAG, "GATT characteristic added");
+            bleSerial.mCharHandle = param->add_char.attr_handle;
+            break;
+
+        case ESP_GATTS_CONNECT_EVT:
+            ESP_LOGI(LOG_TAG, "Client connected");
+            bleSerial.setConnectionHandle(param->connect.conn_id);
+            bleSerial.triggerLimitBTLogs(true);
+            break;
+
+        case ESP_GATTS_DISCONNECT_EVT:
+            ESP_LOGI(LOG_TAG, "Client disconnected");
+            bleSerial.resetConnectionHandle();
+            bleSerial.triggerLimitBTLogs(false);
+            bleSerial.triggerOnBtDataReceived("bleterminalconnected 0");
+            break;
+
+        case ESP_GATTS_WRITE_EVT:
+            if (!param->write.is_prep) {
+                std::string receivedData = bleDataToString(param->write.value, param->write.len);
+                bleSerial.onBtDataRecevied(receivedData);
+            }
+            break;
+
+        default:
+            ESP_LOGI(LOG_TAG, "Unhandled GATT event: %d", event);
+            break;
+    }
+}
+void BluetoothSerial::onBtDataRecevied(std::string receivedData) {
+    if (nullptr != mDataReceviedCallback) {
+        mDataReceviedCallback(std::move(receivedData));
+    }
+}
+
 bool BluetoothSerial::init(BtLogsForwarder* btLogsForwarder, OnBtDataReceviedCallbackType dataReceviedCallback, uint32_t maxTxBufSize) {
     mBtLogsForwarder = btLogsForwarder;
     mDataReceviedCallback = std::move(dataReceviedCallback);
@@ -102,7 +122,7 @@ bool BluetoothSerial::init(BtLogsForwarder* btLogsForwarder, OnBtDataReceviedCal
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
+        ESP_ERROR_CHECK(nvs_flash_init());
     }
     ESP_ERROR_CHECK(ret);
 
@@ -127,25 +147,24 @@ bool BluetoothSerial::init(BtLogsForwarder* btLogsForwarder, OnBtDataReceviedCal
         return false;
     }
 
+    // Register GATT and GAP callbacks
     if ((ret = esp_ble_gatts_register_callback(esp_gatts_event_handler)) != ESP_OK) {
-        ESP_LOGE(LOG_TAG, "GATT register callback failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(LOG_TAG, "GATT callback registration failed: %s", esp_err_to_name(ret));
         return false;
     }
+
+    esp_ble_gatts_app_register(0);  // Register app profile
 
     if ((ret = esp_ble_gap_register_callback(esp_ble_gap_callback)) != ESP_OK) {
         ESP_LOGE(LOG_TAG, "GAP register callback failed: %s", esp_err_to_name(ret));
         return false;
     }
 
-    // Set up BLE service and characteristics
-    // You'll need to define the GATT profile with characteristics that support data transmission
-
     return true;
 }
 
 bool BluetoothSerial::send(std::string message) {
     std::vector<char> data{message.begin(), message.end()};
-    message.clear();
     return send(std::move(data));
 }
 
@@ -154,7 +173,6 @@ bool BluetoothSerial::send(std::vector<char> message) {
     auto doesMessageFitBuffer = mTxData.insert(message.begin(), message.end());
 
     if (mConnectionHandle == 0) {
-        // No terminal connected
         return doesMessageFitBuffer;
     }
 
@@ -166,17 +184,10 @@ bool BluetoothSerial::send(std::vector<char> message) {
     mIsTransmissionRequestInProgress = true;
     lock.unlock();
 
-    // Write data to BLE characteristic (replace with proper BLE GATT write API)
-    esp_ble_gatts_send_indicate(/*gatts_if*/, mConnectionHandle, /*attr_handle*/, 
-        mCurrentTransmittedChunk.size(), reinterpret_cast<uint8_t*>(mCurrentTransmittedChunk.data()), false);
+    esp_ble_gatts_send_indicate(mGattIf, mConnectionHandle, mCharHandle,
+        mCurrentTransmittedChunk.size(), (uint8_t*)mCurrentTransmittedChunk.data(), false);
 
     return doesMessageFitBuffer;
-}
-
-void BluetoothSerial::onBtDataRecevied(std::string receivedData) {
-    if (nullptr != mDataReceviedCallback) {
-        mDataReceviedCallback(std::move(receivedData));
-    }
 }
 
 void BluetoothSerial::transmitChunkOfData() {
@@ -189,11 +200,10 @@ void BluetoothSerial::transmitChunkOfData() {
     if (mCurrentTransmittedChunk.empty()) {
         return;
     }
-
     mIsTransmissionRequestInProgress = true;
     lock.unlock();
 
-    esp_ble_gatts_send_indicate(/*gatts_if*/, mConnectionHandle, /*attr_handle*/,
+    esp_ble_gatts_send_indicate(mGattIf, mConnectionHandle, mCharHandle,
         mCurrentTransmittedChunk.size(), reinterpret_cast<uint8_t*>(mCurrentTransmittedChunk.data()), false);
 }
 
@@ -201,7 +211,7 @@ void BluetoothSerial::extractDataChunkToTransmit() {
     if (!mCurrentTransmittedChunk.empty()) {
         return;
     }
-    mCurrentTransmittedChunk = mTxData.extract(/*BLE_MAX_CHUNK_SIZE*/);
+    mCurrentTransmittedChunk = mTxData.extract(512);  // Adjust size as needed
 }
 
 void BluetoothSerial::limitBTLogs(bool isLimited) {
