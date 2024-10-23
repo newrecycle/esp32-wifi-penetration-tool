@@ -3,7 +3,7 @@ set(COMPONENT_REQUIRES )
 
 # By some reason it is impossible to add "tests" to COMPONENT_PRIV_REQUIRES variable in "if" statement
 # in this CMake. As a workaround we are adding tests headers into COMPONENT_PRIV_INCLUDEDIRS
-set(COMPONENT_PRIV_REQUIRES device_id nvs_flash bt)
+set(COMPONENT_PRIV_REQUIRES device_id nvs_flash esp_ble)
 
 if(DEFINED CONFIG_ENABLE_UNIT_TESTS)
   set(COMPONENT_PRIV_INCLUDEDIRS "${COMPONENT_PRIV_INCLUDEDIRS} ../tests")
