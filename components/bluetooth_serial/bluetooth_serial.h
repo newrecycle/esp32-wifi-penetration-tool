@@ -7,12 +7,11 @@
 #include <vector>
 
 #include "bt_logs_forwarder.h"
-#include "esp_spp_api.h"
+#include "esp_gatts_api.h"  // BLE-specific API
 #include "ring_buffer.h"
 
-// Currently no PIN is required to pair ESP32. All you need is to confirm on your PC that displayed code is the same as
-// printed by ESP32 in logs. Authentyification by PIN is enabled in case SSP is disabled in menu config. In that case
-// default PIN is "1234"
+// Currently no PIN is required to pair ESP32. BLE pairing process will rely on passkey if required.
+// You can set a passkey or use just-confirm-on-device pairing if desired.
 class BluetoothSerial {
  public:
   using OnBtDataReceviedCallbackType = std::function<void(std::string receivedData)>;
@@ -26,17 +25,18 @@ class BluetoothSerial {
  private:
   BluetoothSerial() = default;
   void onBtDataRecevied(std::string receivedData);
-  friend void esp_spp_callback(esp_spp_cb_event_t event, esp_spp_cb_param_t* param);
+  
+  // Replacing SPP callback with GATT event handling
+  friend void esp_gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t* param);
+
   void transmitChunkOfData();
   // NOTE!
   // 1. Requires external lock
   // 2. Moves extracted data to mCurrentTransmittedChunk
   void extractDataChunkToTransmit();
-  // This function will slightly reduce amount oflogs, printed inside this class
-  // It is useful when terminal connection is established via Bluetooth to avoid a lot of echoed messages
+  
   void limitBTLogs(bool isLimited);
-  // This function is used in critical parts, where logs should not be printed when terminal is connected to agoid
-  // logs floor. Internally it checks are logs limited or not and if yes, it sends them only to Serial
+  
   void limitedPrint(uint8_t logLevel, const char* tag, const char* format, ...);
 
   BtLogsForwarder* mBtLogsForwarder{nullptr};
@@ -44,7 +44,10 @@ class BluetoothSerial {
 
   // This data can be accessed from multiple threads, so it is protected by mutex
   std::mutex mMutex;
-  uint32_t mTerminalConnectionHandle{0};
+  
+  // Connection handle for BLE
+  uint16_t mConnectionHandle{0};
+  
   RingBuffer mTxData;
   uint32_t mMaxTxBufSize{16 * 1024};
   std::vector<char> mCurrentTransmittedChunk;
@@ -52,4 +55,4 @@ class BluetoothSerial {
   bool mIsLimitedLogs{false};
 };
 
-#endif  // BT_SERIAL_HPP_
+#endif  // BT_SERIAL_H_
